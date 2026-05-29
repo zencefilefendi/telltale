@@ -38,7 +38,7 @@ testify.**
 | QUIC / HTTP3 ClientHello parsing | ✅ done | [`quic_crypto.py`](telltale/quic_crypto.py) |
 | Per-network learned rarity (JA3/ASN), GeoIP enrichment | ✅ done | [`enrich.py`](telltale/enrich.py) |
 | Statistical / ML baselining | ✅ done | [`baseline.py`](telltale/baseline.py) |
-| Cross-device graph correlation | ⛔ roadmap | Phase 2 |
+| Cross-device graph correlation | ✅ done | [`scorer.py`](telltale/scorer.py) |
 | Endpoint+wire fusion (MVT/iVerify) | ⛔ roadmap | Phase 3 |
 
 ### The six signals, and what each one *actually* costs the attacker
@@ -162,7 +162,6 @@ for *not* treating the wire as the only sensor.
 ### Phase 2 — From rules to models (mid-term)
 - **Time-Series Autocorrelation (FFT / Lomb-Scargle).** Upgrade the beacon detector (S3) beyond simple coefficient of variation (CV). Use signal processing to find rhythmic "spikes" in the frequency spectrum, defeating adversaries who inject artificial Poisson jitter into their heartbeats.
 - **Causelessness Model (Defeating Piggybacking).** Detect implants that only beacon while the user actively browses (A6 Piggybacking). Model the "ecosystem profile" of apps (e.g., WhatsApp traffic should strictly go to Meta ASNs). Flag asymmetric flows to unknown VPS ASNs that occur *concurrently* with legitimate app usage.
-- **Cross-device "Guilt by Association".** Correlate device behavior across the home network. If 3 phones are asleep at 03:00, but only *one* is reaching out to a novel, unverified destination, exponentially increase its risk score. Use the clean herd to expose the infected outlier.
 
 ### Phase 3 — Fusion & Active Hunting (long-term)
 - **"C2 over Messenger" Detection.** Defeat attackers exfiltrating data directly through WhatsApp/iMessage servers (A7). Baseline the volumetric geometry of the messaging channel (short up, short down). Trigger alerts on sustained 95% upstream ratios to known-good couriers during idle hours.

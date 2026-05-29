@@ -24,6 +24,7 @@ from .signals import (
     cluster_by_dst,
     diurnal_findings,
     exfil_findings,
+    herd_findings,
     novelty_findings,
     tls_findings,
     trigger_correlations,
@@ -32,8 +33,8 @@ from .signals import (
 # Behavioral/identity evidence that a contact is machine-driven. The trigger
 # correlation is a powerful *amplifier* but deliberately NOT a corroborator: a
 # benign iMessage you read, then a link you tapped, is also "push -> novel host."
-# Only beacon/exfil/diurnal/tls-blindspot prove the contact had no human shape.
-CORROBORATING = {"beacon", "exfil", "diurnal", "tls_blindspot"}
+# Only beacon/exfil/diurnal/tls-blindspot/herd_isolation prove the contact had no human shape.
+CORROBORATING = {"beacon", "exfil", "diurnal", "tls_blindspot", "herd_isolation"}
 
 
 @dataclass
@@ -97,6 +98,7 @@ def analyze(baseline: Baseline, flows: List[FlowRecord]) -> AnalysisResult:
     exf = exfil_findings(clusters, baseline)
     diu = diurnal_findings(clusters, baseline)
     tls = tls_findings(clusters, baseline)
+    herd = herd_findings(clusters, flows, baseline)
 
     links = trigger_correlations(flows, baseline)
     link_by_dst: Dict[str, dict] = {}
@@ -105,13 +107,13 @@ def analyze(baseline: Baseline, flows: List[FlowRecord]) -> AnalysisResult:
         if k not in link_by_dst or l["dt"] < link_by_dst[k]["dt"]:
             link_by_dst[k] = l
 
-    candidates = set(nov) | set(bfind) | set(exf) | set(diu) | set(tls) | set(link_by_dst)
+    candidates = set(nov) | set(bfind) | set(exf) | set(diu) | set(tls) | set(link_by_dst) | set(herd)
     incidents: List[Incident] = []
 
     for k in candidates:
         fl = clusters.get(k, [])
         findings: List[Finding] = []
-        for src in (nov, bfind, exf, diu, tls):
+        for src in (nov, bfind, exf, diu, tls, herd):
             if k in src:
                 findings.append(src[k])
 
@@ -131,15 +133,27 @@ def analyze(baseline: Baseline, flows: List[FlowRecord]) -> AnalysisResult:
             continue
 
         score = _combine(findings)
+        
+        # Herd Immunity Dampener
+        touching_devices = {f.device for f in fl if f.device}
+        shared_by = len(touching_devices)
+        if shared_by > 1 and score > 0:
+            score = round(score * 0.30, 1) # Dampen risk heavily if shared across network
+            
         inc = Incident(
             incident_id=_incident_id(k),
-            device=fl[0].device if fl else "?",
+            device=", ".join(sorted(touching_devices)) if touching_devices else "?",
             dst=k, score=score, findings=findings,
         )
         if link:
             inc.trigger_ts = link["push"].ts
             inc.trigger_service = link["service"]
         _build_timeline(inc, fl, beacons.get(k), link, exf.get(k))
+        
+        if shared_by > 1:
+            inc.mark(fl[0].ts, "HERD IMMUNITY", f"destination accessed independently by {shared_by} distinct devices on this network; risk heavily damped")
+            inc.timeline.sort(key=lambda x: x[0])
+            
         incidents.append(inc)
 
     incidents.sort(key=lambda i: -i.score)

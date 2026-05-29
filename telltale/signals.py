@@ -257,7 +257,49 @@ def diurnal_findings(clusters: Dict[str, List[FlowRecord]],
     return out
 
 
-# --- S6: tls_blindspot (a handshake that won't name itself) ------------------
+# --- S7: herd_isolation (cross-device graph correlation) -------------------
+def herd_findings(clusters: Dict[str, List[FlowRecord]],
+                  all_flows: List[FlowRecord],
+                  baseline: Baseline) -> Dict[str, Finding]:
+    out: Dict[str, Finding] = {}
+    devices_present = {f.device for f in all_flows if f.device}
+    if len(devices_present) < 2:
+        return out # Herd logic requires at least 2 distinct devices
+
+    for key, fl in clusters.items():
+        if not baseline.is_novel(fl[0]):
+            continue
+
+        touching_devices = {f.device for f in fl if f.device}
+        if len(touching_devices) > 1:
+            continue # Handled by Herd Immunity dampener in scorer.py
+
+        dev = list(touching_devices)[0] if touching_devices else "?"
+        
+        worst = max(fl, key=lambda f: baseline.idle_score(f.ts))
+        idle = baseline.idle_score(worst.ts)
+
+        if idle < IDLE_ALARM:
+            continue
+
+        # Check if other devices were active in a +/- 15 minute window
+        window_start = worst.ts - 900
+        window_end = worst.ts + 900
+
+        active_in_window = {
+            f.device for f in all_flows
+            if window_start <= f.ts <= window_end and not baseline.is_known_good(f) and f.device
+        }
+
+        # If this device is the ONLY one doing non-background/novel things
+        if active_in_window == {dev}:
+            out[key] = Finding(
+                signal="herd_isolation", dst=key, weight=0.35,
+                reason=(f"herd isolation — '{dev}' is the only device active on the network "
+                        f"during an idle hour, contacting a unique novel destination"),
+                ts=worst.ts, evidence={"idle_score": idle, "total_network_devices": len(devices_present)}
+            )
+    return out
 def tls_findings(clusters: Dict[str, List[FlowRecord]],
                  baseline: Baseline) -> Dict[str, Finding]:
     out: Dict[str, Finding] = {}
