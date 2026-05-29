@@ -70,6 +70,7 @@ No dependencies. No install. Just Python 3.9+:
 ```bash
 cd TELLTALE
 python3 -m telltale demo            # generate a world with a hidden implant, then hunt it
+python3 -m telltale.adversary       # run the AI-driven red-team fuzzing engine to train against evasions
 python3 -m telltale demo --no-implant   # same world, clean — watch the false-positive rate
 python3 -m telltale demo --json     # machine-readable output for a SIEM
 ```
@@ -98,7 +99,7 @@ a crime; being awake at 3am is not a crime. TELLTALE combines them.
 | **S1** | `trigger_correlation` | an inbound messaging push, then a **novel** outbound contact within ~2 min — the zero-click silhouette |
 | **S2** | `novelty` | destination provenance: never-seen, DGA-shaped, or parked on a repeatedly-burned ASN |
 | **S3** | `beacon` | metronomic timing — low-jitter heartbeat (coefficient of variation under threshold) |
-| **S4** | `exfil` | directional asymmetry — a steep **upstream** byte burst, the wrong way for a download |
+| **S4** | `exfil` | directional asymmetry — a steep **upstream** byte burst, or a cumulative "low-and-slow" trickle across multiple novel hosts |
 | **S5** | `diurnal` | traffic during a window where the learned human rhythm says **nobody is awake** |
 | **S6** | `tls_blindspot` | a handshake that refuses to name itself — no SNI / raw-IP, plus a rare JA3 |
 

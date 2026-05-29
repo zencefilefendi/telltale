@@ -30,6 +30,7 @@ BEACON_MIN_HITS = 4           # need a few beats before "rhythm" means anything
 BEACON_CV_MAX = 0.35          # std/mean below this = suspiciously regular
 EXFIL_MIN_UP = 256 * 1024     # a quarter-MB upstream is a lot for an idle phone
 EXFIL_UP_RATIO = 0.80         # 80%+ of bytes going *up* is the wrong direction
+EXFIL_TRICKLE_WINDOW_S = 4 * 3600 # 4-hour sliding window to catch slow, multi-IP exfiltration
 IDLE_ALARM = 0.60             # diurnal idle score above which "nobody's awake"
 
 
@@ -158,21 +159,78 @@ def beacon_findings(beacons: Dict[str, dict]) -> Dict[str, Finding]:
 def exfil_findings(clusters: Dict[str, List[FlowRecord]],
                    baseline: Baseline) -> Dict[str, Finding]:
     out: Dict[str, Finding] = {}
+    
+    # 1. Traditional single-burst detection
     for key, fl in clusters.items():
         if not baseline.is_novel(fl[0]):
             continue
         top = max(fl, key=lambda f: f.bytes_up)
-        if top.bytes_up < EXFIL_MIN_UP or top.up_ratio < EXFIL_UP_RATIO:
-            continue
-        size_factor = clamp((top.bytes_up - EXFIL_MIN_UP) / (4 * 1024 * 1024))
-        weight = clamp(0.5 + 0.3 * (top.up_ratio - 0.5) / 0.5 + 0.2 * size_factor)
-        mb = top.bytes_up / (1024 * 1024)
+        if top.bytes_up >= EXFIL_MIN_UP and top.up_ratio >= EXFIL_UP_RATIO:
+            size_factor = clamp((top.bytes_up - EXFIL_MIN_UP) / (4 * 1024 * 1024))
+            weight = clamp(0.5 + 0.3 * (top.up_ratio - 0.5) / 0.5 + 0.2 * size_factor)
+            mb = top.bytes_up / (1024 * 1024)
+            out[key] = Finding(
+                signal="exfil", dst=key, weight=weight,
+                reason=(f"{mb:.2f} MB pushed UPSTREAM ({top.up_ratio*100:.0f}% of bytes) "
+                        f"in a single burst to a novel host — the wrong direction for a download"),
+                ts=top.ts, evidence={"bytes_up": top.bytes_up, "bytes_down": top.bytes_down, "type": "burst"},
+            )
+
+    # 2. Cumulative "Trickle" Exfil detection across ALL novel hosts
+    novel_flows: List[FlowRecord] = []
+    for fl in clusters.values():
+        if fl and baseline.is_novel(fl[0]):
+            novel_flows.extend(fl)
+    novel_flows.sort(key=lambda f: f.ts)
+    
+    window_start = 0
+    cumul_up = 0
+    cumul_down = 0
+    
+    # Track which clusters participated in a trickle breach, and the max bucket size they saw
+    trickle_complicity: Dict[str, dict] = {}
+    
+    for i, f in enumerate(novel_flows):
+        cumul_up += f.bytes_up
+        cumul_down += f.bytes_down
+        
+        while window_start <= i and (f.ts - novel_flows[window_start].ts) > EXFIL_TRICKLE_WINDOW_S:
+            cumul_up -= novel_flows[window_start].bytes_up
+            cumul_down -= novel_flows[window_start].bytes_down
+            window_start += 1
+            
+        cumul_ratio = cumul_up / max(1, cumul_up + cumul_down)
+        
+        # If the window overall breaches the exfil threshold
+        if cumul_up >= EXFIL_MIN_UP and cumul_ratio >= EXFIL_UP_RATIO:
+            # All novel flows within this window are complicit
+            unique_hosts = len({novel_flows[k].dst_key() for k in range(window_start, i + 1)})
+            for j in range(window_start, i + 1):
+                complicit_key = novel_flows[j].dst_key()
+                # Skip if already caught by the single-burst detector
+                if complicit_key in out:
+                    continue
+                if complicit_key not in trickle_complicity or cumul_up > trickle_complicity[complicit_key]["cumul_up"]:
+                    trickle_complicity[complicit_key] = {
+                        "cumul_up": cumul_up,
+                        "ratio": cumul_ratio,
+                        "ts": f.ts,
+                        "hosts": unique_hosts
+                    }
+
+    # Generate findings for clusters caught only by the trickle detector
+    for key, stats in trickle_complicity.items():
+        cumul_up = stats["cumul_up"]
+        mb = cumul_up / (1024 * 1024)
+        size_factor = clamp((cumul_up - EXFIL_MIN_UP) / (4 * 1024 * 1024))
+        weight = clamp(0.4 + 0.3 * (stats["ratio"] - 0.5) / 0.5 + 0.2 * size_factor)
         out[key] = Finding(
             signal="exfil", dst=key, weight=weight,
-            reason=(f"{mb:.2f} MB pushed UPSTREAM ({top.up_ratio*100:.0f}% of bytes) "
-                    f"to a novel host — the wrong direction for a download"),
-            ts=top.ts, evidence={"bytes_up": top.bytes_up, "bytes_down": top.bytes_down},
+            reason=(f"participated in a {mb:.2f} MB cumulative trickle-exfil "
+                    f"({stats['ratio']*100:.0f}% up) spread across {stats['hosts']} novel hosts"),
+            ts=stats["ts"], evidence={"cumul_bytes_up": cumul_up, "type": "trickle"}
         )
+
     return out
 
 

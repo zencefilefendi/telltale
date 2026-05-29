@@ -25,9 +25,11 @@ testify.**
 | Threat intel: couriers, ASN reputation, domain provenance | ✅ done | [`intel.py`](telltale/intel.py) |
 | Behavioral baseline: known-dst set + diurnal rhythm | ✅ done | [`baseline.py`](telltale/baseline.py) |
 | Six detection signals (S1–S6) | ✅ done | [`signals.py`](telltale/signals.py) |
+| Cumulative Trickle Exfil Budget (S4) | ✅ done | [`signals.py`](telltale/signals.py) |
 | Noisy-OR scorer + corroboration gate | ✅ done | [`scorer.py`](telltale/scorer.py) |
 | Explainable incident report + "the tale" | ✅ done | [`narrator.py`](telltale/narrator.py) |
 | Zero-click kill-chain simulator + decoys | ✅ done | [`sim.py`](telltale/sim.py) |
+| Adaptive Red-Team Fuzzing Engine | ✅ done | [`adversary.py`](telltale/adversary.py) |
 | Real pcap ingestion (SNI + spec-correct JA3) | ✅ done | [`pcap_source.py`](telltale/pcap_source.py) |
 | CLI: `demo` / `sim` / `analyze` (+ JSON, exit codes) | ✅ done | [`cli.py`](telltale/cli.py) |
 | Behavioral test suite (6/6) | ✅ done | [`tests/`](tests/test_detection.py) |
@@ -126,9 +128,7 @@ one tell; **causelessness** is the deeper one.
 
 ### A5 — Low-and-slow exfil (defeats S4)
 **Move:** trickle data in small chunks spread over days, each below threshold.
-**Counter:** replace the fixed threshold with a **cumulative upstream budget per
-idle window**, measured *relative to this device's own baseline*. 2 MB at 3am is
-loud; 20 KB every hour all night, summed, is louder than it looks.
+**Counter (✅ Implemented):** replaced the fixed threshold with a **cumulative sliding window budget**, tracking total novel upstream across all unknown IPs simultaneously. 20 KB to 10 rotating Hetzner IPs every hour all night, summed together, now breaches the cumulative S4 threshold and catches the entire complicit cluster.
 
 ### A6 — Activity piggybacking (defeats S5, the hardest)
 **Move:** beacon and exfil *only* while the user is actively using apps, hiding in
@@ -156,41 +156,21 @@ for *not* treating the wire as the only sensor.
 ## Part III — Roadmap
 
 ### Phase 1 — Sharpen the edge (near-term)
-- **Streaming mode.** `telltale watch <iface|fifo>` — continuous analysis over a
-  sliding window instead of file-at-a-time, with stateful incident updates.
-- **`bt2flows.py`.** Finish the bpftrace→`FlowRecord` adapter so the eBPF sensor
-  in [`deploy/`](deploy/telltale-sensor.bt) runs end-to-end on a Linux gateway.
-- **QUIC/HTTP3.** Parse the Initial-packet ClientHello so S6 works on QUIC, which
-  is now the majority of mobile traffic.
-- **Real enrichment.** Offline GeoIP/ASN (MaxMind/IPinfo) and passive-DNS age, so
-  S2 reasons about real provenance instead of curated lists.
-- **Per-network rarity.** Learn JA3/JA3S/ASN frequency *from this network's own
-  baseline* rather than global lists.
+- **Streaming mode.** `telltale watch <iface|fifo>` — continuous analysis over a sliding window instead of file-at-a-time, with stateful incident updates.
+- **Packet Length Sequence (PLS) Analysis.** Beyond QUIC/HTTP3 Initial packets, profile the size and direction of the first 10-15 packets of a flow. Even under Encrypted ClientHello (ECH), the "handshake geometry" of Safari differs from `curl` or a custom C2 implant.
+- **eBPF Process Context Fusion (Companion App).** A lightweight companion app on the endpoint that merely broadcasts UDP syslogs of outbound process metadata (`PID`, `Comm`) to the wire sensor. Correlates wire activity directly to legitimate foreground apps (WhatsApp, Safari) versus isolated background anomalies.
+- **Real enrichment & Rarity.** Offline GeoIP/ASN (MaxMind) and passive-DNS age. Learn JA3/JA3S/ASN frequency *from this network's own baseline* rather than global lists.
 
 ### Phase 2 — From rules to models (mid-term)
-- **Statistical baselining.** Per-device, seasonality-aware diurnal models;
-  robust z-scores and EWMA control charts instead of fixed thresholds (kills the
-  S4/S5 threshold-gaming in A5/A6).
-- **Encrypted-traffic features.** Packet-size distributions, inter-arrival
-  entropy, burst morphology — the literature shows these separate automation from
-  human interaction even under TLS.
-- **JA4+ suite.** Replace/augment JA3 (A2).
-- **DoH/DoT/ECH awareness.** Detect and model encrypted-DNS and ECH (A3).
-- **Cross-device graph.** Correlate the same novel destination/fingerprint seen
-  across multiple devices on one network — a shared stranger is a stronger signal.
+- **Time-Series Autocorrelation (FFT / Lomb-Scargle).** Upgrade the beacon detector (S3) beyond simple coefficient of variation (CV). Use signal processing to find rhythmic "spikes" in the frequency spectrum, defeating adversaries who inject artificial Poisson jitter into their heartbeats.
+- **Causelessness Model (Defeating Piggybacking).** Detect implants that only beacon while the user actively browses (A6 Piggybacking). Model the "ecosystem profile" of apps (e.g., WhatsApp traffic should strictly go to Meta ASNs). Flag asymmetric flows to unknown VPS ASNs that occur *concurrently* with legitimate app usage.
+- **Cross-device "Guilt by Association".** Correlate device behavior across the home network. If 3 phones are asleep at 03:00, but only *one* is reaching out to a novel, unverified destination, exponentially increase its risk score. Use the clean herd to expose the infected outlier.
+- **Statistical baselining & DoH.** Seasonality-aware diurnal models. Detect and model encrypted-DNS and ECH (A3) as features themselves.
 
-### Phase 3 — Fusion & research (long-term)
-- **Endpoint+wire fusion.** Ingest MVT / iVerify / iShutdown findings and fuse
-  with wire incidents — the wire says *when and to whom*, the endpoint says
-  *what process*; together they corner A6/A7.
-- **Privacy-preserving federation.** Learn "normal mobile behavior" across many
-  consenting homes without centralizing anyone's traffic (federated/secure-agg),
-  so a brand-new implant family is novel *everywhere at once*.
-- **Adversarial robustness.** Continuously red-team the detector with an evasion
-  generator (extend [`sim.py`](telltale/sim.py) into a full adversary) and track
-  detection rate as attackers adapt.
-- **Real-world pilot.** Deploy on instrumented consenting devices/networks,
-  measure against ground truth, publish the methodology.
+### Phase 3 — Fusion & Active Hunting (long-term)
+- **"C2 over Messenger" Detection.** Defeat attackers exfiltrating data directly through WhatsApp/iMessage servers (A7). Baseline the volumetric geometry of the messaging channel (short up, short down). Trigger alerts on sustained 95% upstream ratios to known-good couriers during idle hours.
+- **Zero-Trust Cellular Tunneling (Always-On VPN).** Eliminate the cellular blindspot. Route all mobile DNS and metadata (headers only) via WireGuard/IPsec back to the TELLTALE chokepoint when the device leaves the Wi-Fi boundary.
+- **Endpoint+wire fusion.** Ingest MVT / iVerify / iShutdown findings and fuse with wire incidents.
 
 ---
 
