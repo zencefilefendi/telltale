@@ -34,7 +34,7 @@ testify.**
 | CLI: `demo` / `sim` / `analyze` (+ JSON, exit codes) | ✅ done | [`cli.py`](telltale/cli.py) |
 | Behavioral test suite (6/6) | ✅ done | [`tests/`](tests/test_detection.py) |
 | Edge deployment guide + bpftrace sensor sketch | ✅ done | [`deploy/`](deploy/README.md) |
-| Live streaming analysis | ⛔ roadmap | Phase 1 |
+| Live streaming analysis | ✅ done | [`stream.py`](telltale/stream.py) |
 | QUIC / HTTP3 ClientHello parsing | ⛔ roadmap | Phase 1 |
 | Per-network learned rarity (JA3/ASN), GeoIP enrichment | ⛔ roadmap | Phase 1 |
 | Statistical / ML baselining | ⛔ roadmap | Phase 2 |
@@ -156,7 +156,6 @@ for *not* treating the wire as the only sensor.
 ## Part III — Roadmap
 
 ### Phase 1 — Sharpen the edge (near-term)
-- **Streaming mode.** `telltale watch <iface|fifo>` — continuous analysis over a sliding window instead of file-at-a-time, with stateful incident updates.
 - **Packet Length Sequence (PLS) Analysis.** Beyond QUIC/HTTP3 Initial packets, profile the size and direction of the first 10-15 packets of a flow. Even under Encrypted ClientHello (ECH), the "handshake geometry" of Safari differs from `curl` or a custom C2 implant.
 - **eBPF Process Context Fusion (Companion App).** A lightweight companion app on the endpoint that merely broadcasts UDP syslogs of outbound process metadata (`PID`, `Comm`) to the wire sensor. Correlates wire activity directly to legitimate foreground apps (WhatsApp, Safari) versus isolated background anomalies.
 - **Real enrichment & Rarity.** Offline GeoIP/ASN (MaxMind) and passive-DNS age. Learn JA3/JA3S/ASN frequency *from this network's own baseline* rather than global lists.

@@ -123,6 +123,21 @@ def cmd_analyze(args) -> int:
     return run_pipeline(baseline_flows, detection_flows, args.json)
 
 
+def cmd_watch(args) -> int:
+    from .stream import stream_analysis
+    if not args.baseline:
+        print("error: --baseline is required for watch mode", file=sys.stderr)
+        return 3
+        
+    baseline_flows = load_source(args.baseline, force_pcap=False)
+    baseline = Baseline().train(baseline_flows)
+    
+    stream = sys.stdin
+    if args.source and args.source != "-":
+        stream = open(args.source, "r")
+        
+    return stream_analysis(stream, baseline, window_size_s=args.window * 3600)
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="telltale",
@@ -152,6 +167,13 @@ def build_parser() -> argparse.ArgumentParser:
                    help="if no --baseline, fraction of timeline used to learn")
     a.add_argument("--json", action="store_true")
     a.set_defaults(func=cmd_analyze)
+    
+    w = sub.add_parser("watch", help="continuous analysis on a live JSONL stream (e.g. tail -f)")
+    w.add_argument("source", nargs="?", default="-", help="stream source (default: stdin)")
+    w.add_argument("--baseline", required=True, help="baseline flows to use (.jsonl)")
+    w.add_argument("--window", type=float, default=12.0, help="sliding window size in hours (default: 12)")
+    w.set_defaults(func=cmd_watch)
+    
     return p
 
 

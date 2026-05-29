@@ -78,6 +78,7 @@ python3 -m telltale demo --json     # machine-readable output for a SIEM
 Work with real or exported data:
 
 ```bash
+python3 -m telltale watch --baseline base.jsonl          # continuous streaming mode from stdin (e.g. tail -f sensor.jsonl | telltale watch)
 python3 -m telltale sim --out traffic.jsonl              # export synthetic flows
 python3 -m telltale analyze traffic.jsonl --baseline traffic.baseline.jsonl
 python3 -m telltale analyze capture.pcap --pcap          # real capture (needs scapy)
@@ -176,7 +177,6 @@ contents of your messages — only the *shape* of the conversation.
 
 - JA3/JA3S and ASN rarity learned per-network rather than from static lists
 - QUIC/HTTP3 ClientHello (Initial packet) parsing
-- streaming mode (analyze a live tap continuously, not just a file)
 - per-device baselines on multi-device home networks
 - IPFIX/NetFlow and conntrack ingestion for off-the-shelf routers
 
