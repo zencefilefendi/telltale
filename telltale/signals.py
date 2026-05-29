@@ -28,7 +28,6 @@ from .model import Finding, FlowRecord, clamp, coefficient_of_variation
 TRIGGER_WINDOW_S = 120.0      # zero-click contact usually lands within ~2 min
 BEACON_MIN_HITS = 4           # need a few beats before "rhythm" means anything
 BEACON_CV_MAX = 0.35          # std/mean below this = suspiciously regular
-EXFIL_MIN_UP = 256 * 1024     # a quarter-MB upstream is a lot for an idle phone
 EXFIL_UP_RATIO = 0.80         # 80%+ of bytes going *up* is the wrong direction
 EXFIL_TRICKLE_WINDOW_S = 4 * 3600 # 4-hour sliding window to catch slow, multi-IP exfiltration
 IDLE_ALARM = 0.60             # diurnal idle score above which "nobody's awake"
@@ -169,8 +168,8 @@ def exfil_findings(clusters: Dict[str, List[FlowRecord]],
         if not baseline.is_novel(fl[0]):
             continue
         top = max(fl, key=lambda f: f.bytes_up)
-        if top.bytes_up >= EXFIL_MIN_UP and top.up_ratio >= EXFIL_UP_RATIO:
-            size_factor = clamp((top.bytes_up - EXFIL_MIN_UP) / (4 * 1024 * 1024))
+        if top.bytes_up >= baseline.exfil_threshold and top.up_ratio >= EXFIL_UP_RATIO:
+            size_factor = clamp((top.bytes_up - baseline.exfil_threshold) / (4 * 1024 * 1024))
             weight = clamp(0.5 + 0.3 * (top.up_ratio - 0.5) / 0.5 + 0.2 * size_factor)
             mb = top.bytes_up / (1024 * 1024)
             out[key] = Finding(
@@ -206,7 +205,7 @@ def exfil_findings(clusters: Dict[str, List[FlowRecord]],
         cumul_ratio = cumul_up / max(1, cumul_up + cumul_down)
         
         # If the window overall breaches the exfil threshold
-        if cumul_up >= EXFIL_MIN_UP and cumul_ratio >= EXFIL_UP_RATIO:
+        if cumul_up >= baseline.exfil_threshold and cumul_ratio >= EXFIL_UP_RATIO:
             # All novel flows within this window are complicit
             unique_hosts = len({novel_flows[k].dst_key() for k in range(window_start, i + 1)})
             for j in range(window_start, i + 1):
@@ -226,7 +225,7 @@ def exfil_findings(clusters: Dict[str, List[FlowRecord]],
     for key, stats in trickle_complicity.items():
         cumul_up = stats["cumul_up"]
         mb = cumul_up / (1024 * 1024)
-        size_factor = clamp((cumul_up - EXFIL_MIN_UP) / (4 * 1024 * 1024))
+        size_factor = clamp((cumul_up - baseline.exfil_threshold) / (4 * 1024 * 1024))
         weight = clamp(0.4 + 0.3 * (stats["ratio"] - 0.5) / 0.5 + 0.2 * size_factor)
         out[key] = Finding(
             signal="exfil", dst=key, weight=weight,
