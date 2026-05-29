@@ -42,6 +42,8 @@ testify.**
 | Endpoint+wire fusion (MVT/iVerify) | ✅ done | [`fusion.py`](telltale/fusion.py) |
 | C2 over Messenger detection (S8) | ✅ done | [`signals.py`](telltale/signals.py) |
 
+| Zero-Trust Cellular Tunneling (Always-On VPN) | ✅ done | [`deploy/vpn_tunnel.sh`](deploy/vpn_tunnel.sh) |
+
 ### The six signals, and what each one *actually* costs the attacker
 
 | # | Signal | Invariant | Attacker cost to evade |
@@ -163,9 +165,6 @@ for *not* treating the wire as the only sensor.
 ### Phase 2 — From rules to models (mid-term)
 - **Time-Series Autocorrelation (FFT / Lomb-Scargle).** Upgrade the beacon detector (S3) beyond simple coefficient of variation (CV). Use signal processing to find rhythmic "spikes" in the frequency spectrum, defeating adversaries who inject artificial Poisson jitter into their heartbeats.
 - **Causelessness Model (Defeating Piggybacking).** Detect implants that only beacon while the user actively browses (A6 Piggybacking). Model the "ecosystem profile" of apps (e.g., WhatsApp traffic should strictly go to Meta ASNs). Flag asymmetric flows to unknown VPS ASNs that occur *concurrently* with legitimate app usage.
-
-### Phase 3 — Fusion & Active Hunting (long-term)
-- **Zero-Trust Cellular Tunneling (Always-On VPN).** Eliminate the cellular blindspot. Route all mobile DNS and metadata (headers only) via WireGuard/IPsec back to the TELLTALE chokepoint when the device leaves the Wi-Fi boundary.
 
 ---
 
