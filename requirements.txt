@@ -1,0 +1,6 @@
+# TELLTALE runs its entire demo and JSONL analysis on the Python standard
+# library alone — no install required:   python3 -m telltale demo
+#
+# The line below is OPTIONAL and only needed to ingest real .pcap/.pcapng files
+# (telltale analyze capture.pcap --pcap). Everything else works without it.
+scapy>=2.5.0

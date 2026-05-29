@@ -1,0 +1,48 @@
+#!/usr/bin/env bpftrace
+/*
+ * TELLTALE wire sensor (sketch) — emit one event per outbound TCP connect.
+ *
+ *   sudo bpftrace -f json deploy/telltale-sensor.bt
+ *
+ * In-kernel, connection-scale (not packet-scale), payload-blind. On a host
+ * endpoint, `comm`/`pid` answer the question screen access can't: was there an
+ * app reason for this connection?  A connect from a UI-less process, on a steady
+ * cadence, to a never-seen address is the silhouette TELLTALE's S1/S2/S3/S6 keys
+ * on. On a pure gateway there is no process context — lean on the network-shape
+ * signals (timing, direction, novelty, SNI absence) instead.
+ *
+ * Pipe into a small adapter (deploy/bt2flows.py) to produce the JSONL that
+ * `telltale analyze` consumes. Field offsets can vary by kernel; treat as a
+ * starting point, not a turnkey binary.
+ */
+
+#include <linux/socket.h>
+#include <netinet/in.h>
+
+BEGIN {
+  printf("{\"telltale_sensor\":\"up\",\"unit\":\"connect-event\"}\n");
+}
+
+/* IPv4: tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int len) */
+kprobe:tcp_v4_connect {
+  $ua   = (struct sockaddr_in *)arg1;
+  $port = ($ua->sin_port >> 8) | (($ua->sin_port & 0xff) << 8);   /* ntohs */
+  $a    = $ua->sin_addr.s_addr;                                   /* net order */
+  printf("{\"ts\":%llu,\"af\":4,\"comm\":\"%s\",\"pid\":%d,\"daddr\":\"%d.%d.%d.%d\",\"dport\":%d}\n",
+         nsecs / 1000000000, comm, pid,
+         $a & 0xff, ($a >> 8) & 0xff, ($a >> 16) & 0xff, ($a >> 24) & 0xff,
+         $port);
+}
+
+/* IPv6: tcp_v6_connect(struct sock *sk, struct sockaddr *uaddr, int len) */
+kprobe:tcp_v6_connect {
+  $ua   = (struct sockaddr_in6 *)arg1;
+  $port = ($ua->sin6_port >> 8) | (($ua->sin6_port & 0xff) << 8);
+  printf("{\"ts\":%llu,\"af\":6,\"comm\":\"%s\",\"pid\":%d,\"daddr6\":\"%s\",\"dport\":%d}\n",
+         nsecs / 1000000000, comm, pid,
+         ntop(AF_INET6, $ua->sin6_addr.in6_u.u6_addr8), $port);
+}
+
+END {
+  printf("{\"telltale_sensor\":\"down\"}\n");
+}
