@@ -30,13 +30,16 @@ class Baseline:
         self.known_dst: Set[str] = set()
         self.dst_first_seen: Dict[str, float] = {}
         self.ja3_counts: Dict[str, int] = defaultdict(int)
+        self.asn_counts: Dict[int, int] = defaultdict(int)
         self.hour_distinct: List[float] = [0.0] * 24   # avg distinct dsts / hour
         self._trained = False
         self._days = 1
+        self._total_flows = 0
 
     # ---- training -----------------------------------------------------------
     def train(self, flows: Iterable[FlowRecord]) -> "Baseline":
         flows = list(flows)
+        self._total_flows += len(flows)
         per_hour_day: Dict[tuple, Set[str]] = defaultdict(set)
         days: Set[str] = set()
 
@@ -46,6 +49,8 @@ class Baseline:
             self.dst_first_seen.setdefault(key, f.ts)
             if f.ja3:
                 self.ja3_counts[f.ja3] += 1
+            if f.asn:
+                self.asn_counts[f.asn] += 1
             dt = datetime.fromtimestamp(f.ts)
             day = dt.strftime("%Y-%m-%d")
             days.add(day)
@@ -92,6 +97,17 @@ class Baseline:
             return False
         # Rare = seen at most once across the whole training window.
         return self.ja3_counts.get(ja3, 0) <= 1
+
+    def is_rare_asn(self, asn: Optional[int]) -> bool:
+        if not asn:
+            return False
+        # Rare = seen less than 3 times or makes up less than 0.01% of traffic
+        count = self.asn_counts.get(asn, 0)
+        if count < 3:
+            return True
+        if self._total_flows > 1000 and (count / self._total_flows) < 0.0001:
+            return True
+        return False
 
     def idle_score(self, ts: float) -> float:
         """0..1 — how *unexpected* it is for the human to be generating traffic now.

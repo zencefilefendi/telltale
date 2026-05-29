@@ -55,6 +55,9 @@ def stream_analysis(
             except Exception:
                 continue # Skip malformed lines silently in production streaming
                 
+            from .enrich import enrich_flows
+            enrich_flows([flow])
+                
             window.append(flow)
             
             # Age out old flows

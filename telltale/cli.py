@@ -33,13 +33,17 @@ def _looks_pcap(path: str) -> bool:
 def load_source(path: str, force_pcap: bool = False) -> List[FlowRecord]:
     if force_pcap or _looks_pcap(path):
         from .pcap_source import read_pcap
-        return read_pcap(path)
-    flows: List[FlowRecord] = []
-    with open(path, "r") as fh:
-        for line in fh:
-            line = line.strip()
-            if line:
-                flows.append(FlowRecord.from_dict(json.loads(line)))
+        flows = read_pcap(path)
+    else:
+        flows: List[FlowRecord] = []
+        with open(path, "r") as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    flows.append(FlowRecord.from_dict(json.loads(line)))
+                    
+    from .enrich import enrich_flows
+    enrich_flows(flows)
     return flows
 
 

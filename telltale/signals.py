@@ -103,6 +103,10 @@ def novelty_findings(clusters: Dict[str, List[FlowRecord]],
         elif t <= 0.40:
             score += 0.15
             reasons.append(f"generic VPS/colo hosting (AS{f0.asn} {f0.asn_name or ''})".strip())
+        elif baseline.is_rare_asn(f0.asn):
+            score += 0.20
+            reasons.append(f"hosted on an ASN previously unseen on this network "
+                           f"(AS{f0.asn} {f0.asn_name or ''})".strip())
 
         out[key] = Finding(
             signal="novelty", dst=key, weight=clamp(score),

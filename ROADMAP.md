@@ -36,7 +36,7 @@ testify.**
 | Edge deployment guide + bpftrace sensor sketch | ✅ done | [`deploy/`](deploy/README.md) |
 | Live streaming analysis | ✅ done | [`stream.py`](telltale/stream.py) |
 | QUIC / HTTP3 ClientHello parsing | ✅ done | [`quic_crypto.py`](telltale/quic_crypto.py) |
-| Per-network learned rarity (JA3/ASN), GeoIP enrichment | ⛔ roadmap | Phase 1 |
+| Per-network learned rarity (JA3/ASN), GeoIP enrichment | ✅ done | [`enrich.py`](telltale/enrich.py) |
 | Statistical / ML baselining | ⛔ roadmap | Phase 2 |
 | Cross-device graph correlation | ⛔ roadmap | Phase 2 |
 | Endpoint+wire fusion (MVT/iVerify) | ⛔ roadmap | Phase 3 |
@@ -158,7 +158,6 @@ for *not* treating the wire as the only sensor.
 ### Phase 1 — Sharpen the edge (near-term)
 - **Packet Length Sequence (PLS) Analysis.** Beyond QUIC/HTTP3 Initial packets, profile the size and direction of the first 10-15 packets of a flow. Even under Encrypted ClientHello (ECH), the "handshake geometry" of Safari differs from `curl` or a custom C2 implant.
 - **eBPF Process Context Fusion (Companion App).** A lightweight companion app on the endpoint that merely broadcasts UDP syslogs of outbound process metadata (`PID`, `Comm`) to the wire sensor. Correlates wire activity directly to legitimate foreground apps (WhatsApp, Safari) versus isolated background anomalies.
-- **Real enrichment & Rarity.** Offline GeoIP/ASN (MaxMind) and passive-DNS age. Learn JA3/JA3S/ASN frequency *from this network's own baseline* rather than global lists.
 
 ### Phase 2 — From rules to models (mid-term)
 - **Time-Series Autocorrelation (FFT / Lomb-Scargle).** Upgrade the beacon detector (S3) beyond simple coefficient of variation (CV). Use signal processing to find rhythmic "spikes" in the frequency spectrum, defeating adversaries who inject artificial Poisson jitter into their heartbeats.
