@@ -84,9 +84,17 @@ def result_to_json(result: AnalysisResult, baseline: Baseline) -> dict:
 
 
 # ---- verbs ------------------------------------------------------------------
-def run_pipeline(baseline_flows, detection_flows, as_json: bool) -> int:
+def run_pipeline(baseline_flows, detection_flows, as_json: bool, endpoint_log: str = None) -> int:
     baseline = Baseline().train(baseline_flows)
     result = analyze(baseline, detection_flows)
+    
+    if endpoint_log:
+        from .fusion import parse_endpoint_log, fuse_incidents
+        events = parse_endpoint_log(endpoint_log)
+        fuse_incidents(result.incidents, events)
+        # Update critical stats if fusion pushed incidents over the threshold
+        result.stats["critical"] = sum(1 for i in result.incidents if i.verdict == "CRITICAL")
+        
     if as_json:
         print(json.dumps(result_to_json(result, baseline), indent=2))
     else:
@@ -99,7 +107,7 @@ def cmd_demo(args) -> int:
     from .sim import generate
     baseline_flows, detection_flows = generate(
         seed=args.seed, baseline_days=args.days, with_implant=not args.no_implant)
-    return run_pipeline(baseline_flows, detection_flows, args.json)
+    return run_pipeline(baseline_flows, detection_flows, args.json, getattr(args, "endpoint_log", None))
 
 
 def cmd_sim(args) -> int:
@@ -124,7 +132,7 @@ def cmd_analyze(args) -> int:
         if not baseline_flows:
             print("not enough data to form a baseline; use --baseline", file=sys.stderr)
             return 3
-    return run_pipeline(baseline_flows, detection_flows, args.json)
+    return run_pipeline(baseline_flows, detection_flows, args.json, getattr(args, "endpoint_log", None))
 
 
 def cmd_watch(args) -> int:
@@ -169,6 +177,7 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--pcap", action="store_true", help="force pcap parsing")
     a.add_argument("--train-frac", type=float, default=0.6,
                    help="if no --baseline, fraction of timeline used to learn")
+    a.add_argument("--endpoint-log", help="MVT timeline or generic JSONL endpoint forensic log to fuse with network data")
     a.add_argument("--json", action="store_true")
     a.set_defaults(func=cmd_analyze)
     

@@ -39,7 +39,7 @@ testify.**
 | Per-network learned rarity (JA3/ASN), GeoIP enrichment | ✅ done | [`enrich.py`](telltale/enrich.py) |
 | Statistical / ML baselining | ✅ done | [`baseline.py`](telltale/baseline.py) |
 | Cross-device graph correlation | ✅ done | [`scorer.py`](telltale/scorer.py) |
-| Endpoint+wire fusion (MVT/iVerify) | ⛔ roadmap | Phase 3 |
+| Endpoint+wire fusion (MVT/iVerify) | ✅ done | [`fusion.py`](telltale/fusion.py) |
 
 ### The six signals, and what each one *actually* costs the attacker
 
@@ -166,7 +166,6 @@ for *not* treating the wire as the only sensor.
 ### Phase 3 — Fusion & Active Hunting (long-term)
 - **"C2 over Messenger" Detection.** Defeat attackers exfiltrating data directly through WhatsApp/iMessage servers (A7). Baseline the volumetric geometry of the messaging channel (short up, short down). Trigger alerts on sustained 95% upstream ratios to known-good couriers during idle hours.
 - **Zero-Trust Cellular Tunneling (Always-On VPN).** Eliminate the cellular blindspot. Route all mobile DNS and metadata (headers only) via WireGuard/IPsec back to the TELLTALE chokepoint when the device leaves the Wi-Fi boundary.
-- **Endpoint+wire fusion.** Ingest MVT / iVerify / iShutdown findings and fuse with wire incidents.
 
 ---
 
