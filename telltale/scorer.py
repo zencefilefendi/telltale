@@ -21,6 +21,7 @@ from .signals import (
     TRIGGER_WINDOW_S,
     beacon_findings,
     beacon_scan,
+    c2_over_messenger_findings,
     cluster_by_dst,
     diurnal_findings,
     exfil_findings,
@@ -34,7 +35,7 @@ from .signals import (
 # correlation is a powerful *amplifier* but deliberately NOT a corroborator: a
 # benign iMessage you read, then a link you tapped, is also "push -> novel host."
 # Only beacon/exfil/diurnal/tls-blindspot/herd_isolation prove the contact had no human shape.
-CORROBORATING = {"beacon", "exfil", "diurnal", "tls_blindspot", "herd_isolation"}
+CORROBORATING = {"beacon", "exfil", "diurnal", "tls_blindspot", "herd_isolation", "c2_over_messenger"}
 
 
 @dataclass
@@ -99,6 +100,7 @@ def analyze(baseline: Baseline, flows: List[FlowRecord]) -> AnalysisResult:
     diu = diurnal_findings(clusters, baseline)
     tls = tls_findings(clusters, baseline)
     herd = herd_findings(clusters, flows, baseline)
+    c2m = c2_over_messenger_findings(clusters, baseline)
 
     links = trigger_correlations(flows, baseline)
     link_by_dst: Dict[str, dict] = {}
@@ -107,13 +109,13 @@ def analyze(baseline: Baseline, flows: List[FlowRecord]) -> AnalysisResult:
         if k not in link_by_dst or l["dt"] < link_by_dst[k]["dt"]:
             link_by_dst[k] = l
 
-    candidates = set(nov) | set(bfind) | set(exf) | set(diu) | set(tls) | set(link_by_dst) | set(herd)
+    candidates = set(nov) | set(bfind) | set(exf) | set(diu) | set(tls) | set(link_by_dst) | set(herd) | set(c2m)
     incidents: List[Incident] = []
 
     for k in candidates:
         fl = clusters.get(k, [])
         findings: List[Finding] = []
-        for src in (nov, bfind, exf, diu, tls, herd):
+        for src in (nov, bfind, exf, diu, tls, herd, c2m):
             if k in src:
                 findings.append(src[k])
 

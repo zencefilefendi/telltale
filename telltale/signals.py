@@ -237,6 +237,50 @@ def exfil_findings(clusters: Dict[str, List[FlowRecord]],
     return out
 
 
+# --- S8: c2_over_messenger (A7 evasion counter) -----------------------------
+def c2_over_messenger_findings(clusters: Dict[str, List[FlowRecord]],
+                               baseline: Baseline) -> Dict[str, Finding]:
+    """Detects exfiltration tunneled *through* legitimate messaging infrastructure.
+    
+    Normally, traffic to WhatsApp/APNs is allowlisted (known_good). This catches
+    the A7 evasion by looking for extreme volumetric anomalies on these specific 
+    channels during idle hours (when the human isn't sending 50MB videos).
+    """
+    from .intel import push_service_for
+    out: Dict[str, Finding] = {}
+    
+    for key, fl in clusters.items():
+        f0 = fl[0]
+        courier = push_service_for(f0.domain or f0.sni)
+        if not courier:
+            continue
+            
+        # We only care about couriers during idle hours
+        worst = max(fl, key=lambda f: baseline.idle_score(f.ts))
+        idle = baseline.idle_score(worst.ts)
+        if idle < IDLE_ALARM:
+            continue
+            
+        # Look for heavy upstream bias on the courier channel
+        top = max(fl, key=lambda f: f.bytes_up)
+        
+        # A 90% upstream ratio to a courier with significant volume at 3 AM is highly suspicious
+        if top.bytes_up >= (baseline.exfil_threshold * 0.5) and top.up_ratio >= 0.90:
+            mb = top.bytes_up / (1024 * 1024)
+            size_factor = clamp((top.bytes_up - (baseline.exfil_threshold * 0.5)) / (2 * 1024 * 1024))
+            weight = clamp(0.5 + 0.3 * (top.up_ratio - 0.5) / 0.5 + 0.2 * size_factor)
+            
+            out[key] = Finding(
+                signal="c2_over_messenger", dst=key, weight=weight,
+                reason=(f"channel abuse — {mb:.2f} MB pushed UPSTREAM ({top.up_ratio*100:.0f}%) "
+                        f"to {courier} during an idle hour (idle score {idle:.2f}); "
+                        f"this breaks normal messaging geometry"),
+                ts=top.ts, evidence={"courier": courier, "bytes_up": top.bytes_up, "idle_score": idle}
+            )
+            
+    return out
+
+
 # --- S5: diurnal (no human awake) -------------------------------------------
 def diurnal_findings(clusters: Dict[str, List[FlowRecord]],
                      baseline: Baseline) -> Dict[str, Finding]:
