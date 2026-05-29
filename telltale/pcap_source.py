@@ -165,13 +165,31 @@ def read_pcap(path: str) -> List[FlowRecord]:
         fl["bytes"][src] += size
         fl["pkts"][src] += 1
 
+        raw = bytes(l4.payload) if l4.payload else b""
+
         if proto == "tcp" and fl["sni"] is None and (dport in TLS_PORTS):
-            raw = bytes(l4.payload) if l4.payload else b""
             if raw[:1] == b"\x16":
                 sni, ja3 = parse_client_hello(raw)
                 if sni or ja3:
                     fl["sni"], fl["ja3"] = sni, ja3
                     fl["server"] = dst
+                    
+        elif proto == "udp" and fl["sni"] is None and (dport == 443):
+            # Try parsing as QUIC Initial packet
+            if len(raw) >= 1200 and (raw[0] & 0xc0) == 0xc0:
+                from .quic_crypto import extract_quic_crypto_frame
+                crypto_frame = extract_quic_crypto_frame(raw)
+                if crypto_frame:
+                    # The crypto frame contains a TLS Handshake message
+                    # We prepend the TLS record header so parse_client_hello can process it
+                    # 0x16 = Handshake, 0x0303 = TLS 1.2+, then Length
+                    length = len(crypto_frame)
+                    tls_record = b"\x16\x03\x03" + length.to_bytes(2, "big") + crypto_frame
+                    sni, ja3 = parse_client_hello(tls_record)
+                    if sni or ja3:
+                        fl["sni"], fl["ja3"] = sni, ja3
+                        fl["server"] = dst
+                        fl["proto"] = "quic"
 
     records: List[FlowRecord] = []
     for (eps, proto), fl in flows.items():

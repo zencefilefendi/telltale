@@ -176,7 +176,6 @@ contents of your messages — only the *shape* of the conversation.
 ## Roadmap
 
 - JA3/JA3S and ASN rarity learned per-network rather than from static lists
-- QUIC/HTTP3 ClientHello (Initial packet) parsing
 - per-device baselines on multi-device home networks
 - IPFIX/NetFlow and conntrack ingestion for off-the-shelf routers
 

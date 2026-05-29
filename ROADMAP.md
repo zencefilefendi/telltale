@@ -35,7 +35,7 @@ testify.**
 | Behavioral test suite (6/6) | ✅ done | [`tests/`](tests/test_detection.py) |
 | Edge deployment guide + bpftrace sensor sketch | ✅ done | [`deploy/`](deploy/README.md) |
 | Live streaming analysis | ✅ done | [`stream.py`](telltale/stream.py) |
-| QUIC / HTTP3 ClientHello parsing | ⛔ roadmap | Phase 1 |
+| QUIC / HTTP3 ClientHello parsing | ✅ done | [`quic_crypto.py`](telltale/quic_crypto.py) |
 | Per-network learned rarity (JA3/ASN), GeoIP enrichment | ⛔ roadmap | Phase 1 |
 | Statistical / ML baselining | ⛔ roadmap | Phase 2 |
 | Cross-device graph correlation | ⛔ roadmap | Phase 2 |
