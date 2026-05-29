@@ -330,9 +330,10 @@ def herd_findings(clusters: Dict[str, List[FlowRecord]],
         window_start = worst.ts - 900
         window_end = worst.ts + 900
 
+        from .intel import is_known_good
         active_in_window = {
             f.device for f in all_flows
-            if window_start <= f.ts <= window_end and not baseline.is_known_good(f) and f.device
+            if window_start <= f.ts <= window_end and not is_known_good(f) and f.device
         }
 
         # If this device is the ONLY one doing non-background/novel things
